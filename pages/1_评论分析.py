@@ -29,6 +29,12 @@ FILTER_OPTIONS = [
     "高价值评论",
 ]
 
+SORT_OPTIONS = [
+    "默认排序",
+    "点赞数从高到低",
+    "回复数从高到低",
+]
+
 
 st.set_page_config(
     page_title="评论分析",
@@ -51,6 +57,13 @@ if clear_requested:
 selected_tag = st.selectbox(
     "按系统标签筛选",
     FILTER_OPTIONS,
+)
+
+search_keyword = st.text_input("搜索评论内容")
+
+selected_sort = st.selectbox(
+    "排序方式",
+    SORT_OPTIONS,
 )
 
 uploaded_file = st.file_uploader(
@@ -128,6 +141,23 @@ def filter_preview_table(preview_df, selected_filter):
     return preview_df[preview_df["系统标签"] == selected_filter]
 
 
+def search_preview_table(preview_df, keyword):
+    keyword = keyword.strip()
+    if not keyword:
+        return preview_df
+    return preview_df[
+        preview_df["评论内容"].fillna("").astype(str).str.contains(keyword, na=False)
+    ]
+
+
+def sort_preview_table(preview_df, selected_sort):
+    if selected_sort == "点赞数从高到低":
+        return preview_df.sort_values("点赞数", ascending=False)
+    if selected_sort == "回复数从高到低":
+        return preview_df.sort_values("回复数", ascending=False)
+    return preview_df
+
+
 def import_and_show_comments(comments_df):
     records = build_comment_records(comments_df)
     inserted_count = insert_comments(records)
@@ -138,12 +168,14 @@ def import_and_show_comments(comments_df):
     st.session_state.last_total_count = total_count
 
 
-def show_import_result(selected_filter):
+def show_import_result(selected_filter, keyword, selected_sort):
     records = st.session_state.get("preview_records", [])
     inserted_count = st.session_state.get("last_inserted_count", 0)
     total_count = st.session_state.get("last_total_count", get_comment_count())
     preview_df = build_preview_table(records)
     filtered_df = filter_preview_table(preview_df, selected_filter)
+    filtered_df = search_preview_table(filtered_df, keyword)
+    filtered_df = sort_preview_table(filtered_df, selected_sort)
 
     st.success(f"导入成功 {inserted_count} 条")
     st.info(f"数据库当前共有 {total_count} 条评论")
@@ -175,14 +207,14 @@ if uploaded_file is not None and not clear_requested:
             elif st.session_state.get("last_import_signature") != current_signature:
                 import_and_show_comments(comments_df)
                 st.session_state.last_import_signature = current_signature
-                show_import_result(selected_tag)
+                show_import_result(selected_tag, search_keyword, selected_sort)
             elif st.session_state.get("preview_records"):
-                show_import_result(selected_tag)
+                show_import_result(selected_tag, search_keyword, selected_sort)
             else:
                 import_and_show_comments(comments_df)
                 st.session_state.last_import_signature = current_signature
-                show_import_result(selected_tag)
+                show_import_result(selected_tag, search_keyword, selected_sort)
     except Exception:
         st.error("文件读取失败，请检查文件格式或内容后重新上传。")
 elif st.session_state.get("preview_records"):
-    show_import_result(selected_tag)
+    show_import_result(selected_tag, search_keyword, selected_sort)
