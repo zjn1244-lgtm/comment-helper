@@ -111,6 +111,34 @@ def get_comments():
         return [dict(row) for row in cursor.fetchall()]
 
 
+def get_saved_comments():
+    init_comments_table()
+
+    with get_connection() as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute(
+            """
+            SELECT
+                id,
+                comment_id,
+                username,
+                content,
+                likes,
+                replies,
+                created_at,
+                system_tag,
+                note,
+                is_saved,
+                is_processed,
+                imported_at
+            FROM comments
+            WHERE is_saved = 1
+            ORDER BY id ASC
+            """
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
 def clear_comments():
     init_comments_table()
 
@@ -125,5 +153,16 @@ def update_comment_processed(comment_id, is_processed):
         cursor = conn.execute(
             "UPDATE comments SET is_processed = ? WHERE id = ?",
             (1 if is_processed else 0, comment_id),
+        )
+        return cursor.rowcount > 0
+
+
+def update_comment_saved(comment_id, is_saved):
+    init_comments_table()
+
+    with get_connection() as conn:
+        cursor = conn.execute(
+            "UPDATE comments SET is_saved = ? WHERE id = ?",
+            (1 if is_saved else 0, comment_id),
         )
         return cursor.rowcount > 0

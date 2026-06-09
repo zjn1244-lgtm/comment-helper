@@ -10,6 +10,7 @@ from core.database import (
     get_comments,
     init_comments_table,
     insert_comments,
+    update_comment_saved,
     update_comment_processed,
 )
 
@@ -142,6 +143,7 @@ def build_preview_table(records):
                 "回复数": record["replies"],
                 "系统标签": record["system_tag"],
                 "处理状态": "已处理" if record["is_processed"] else "未处理",
+                "收藏状态": "已收藏" if record["is_saved"] else "未收藏",
             }
             for record in records
         ]
@@ -195,6 +197,10 @@ def set_processed_status(record_id, is_processed):
     update_comment_processed(record_id, is_processed)
 
 
+def set_saved_status(record_id, is_saved):
+    update_comment_saved(record_id, is_saved)
+
+
 def show_comment_list(records):
     if not records:
         st.warning("没有符合条件的评论")
@@ -205,23 +211,33 @@ def show_comment_list(records):
         use_container_width=True,
     )
 
-    st.write("处理状态操作")
+    st.write("评论操作")
     for index, record in enumerate(records):
         status_text = "已处理" if record["is_processed"] else "未处理"
-        button_text = "取消已处理" if record["is_processed"] else "标记已处理"
-        columns = st.columns([5, 1, 1, 1, 1, 1])
+        saved_text = "已收藏" if record["is_saved"] else "未收藏"
+        process_button_text = "取消已处理" if record["is_processed"] else "标记已处理"
+        save_button_text = "取消收藏" if record["is_saved"] else "收藏"
+        columns = st.columns([5, 1, 1, 1, 1, 1, 1, 1])
 
         columns[0].write(record["content"])
         columns[1].write(record["likes"])
         columns[2].write(record["replies"])
         columns[3].write(record["system_tag"])
         columns[4].write(status_text)
+        columns[5].write(saved_text)
 
-        if columns[5].button(
-            button_text,
+        if columns[6].button(
+            process_button_text,
             key=f"processed_{record.get('id', index)}_{record['is_processed']}",
         ):
             set_processed_status(record.get("id"), not record["is_processed"])
+            st.rerun()
+
+        if columns[7].button(
+            save_button_text,
+            key=f"saved_{record.get('id', index)}_{record['is_saved']}",
+        ):
+            set_saved_status(record.get("id"), not record["is_saved"])
             st.rerun()
 
 
