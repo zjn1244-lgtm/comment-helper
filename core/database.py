@@ -166,10 +166,17 @@ def get_saved_comments(workspace_id):
 
 
 def clear_comments(workspace_id):
+    if not workspace_id:
+        return 0
+
     init_comments_table()
 
     with get_connection() as conn:
-        conn.execute("DELETE FROM comments WHERE workspace_id = ?", (workspace_id,))
+        cursor = conn.execute(
+            "DELETE FROM comments WHERE workspace_id = ?",
+            (workspace_id,),
+        )
+        return cursor.rowcount
 
 
 def update_comment_processed(comment_id, workspace_id, is_processed):
