@@ -22,6 +22,7 @@ def init_comments_table():
                 likes INTEGER DEFAULT 0,
                 replies INTEGER DEFAULT 0,
                 created_at TEXT,
+                video_url TEXT,
                 system_tag TEXT,
                 note TEXT,
                 is_saved INTEGER DEFAULT 0,
@@ -30,6 +31,15 @@ def init_comments_table():
             )
             """
         )
+        ensure_column(conn, "comments", "video_url", "TEXT")
+
+
+def ensure_column(conn, table_name, column_name, column_type):
+    cursor = conn.execute(f"PRAGMA table_info({table_name})")
+    existing_columns = {row[1] for row in cursor.fetchall()}
+
+    if column_name not in existing_columns:
+        conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
 
 
 def insert_comments(comments):
@@ -49,13 +59,14 @@ def insert_comments(comments):
                     likes,
                     replies,
                     created_at,
+                    video_url,
                     system_tag,
                     note,
                     is_saved,
                     is_processed,
                     imported_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     comment.get("comment_id"),
@@ -64,6 +75,7 @@ def insert_comments(comments):
                     comment.get("likes", 0),
                     comment.get("replies", 0),
                     comment.get("created_at"),
+                    comment.get("video_url"),
                     comment.get("system_tag"),
                     comment.get("note"),
                     comment.get("is_saved", 0),
@@ -99,6 +111,7 @@ def get_comments():
                 likes,
                 replies,
                 created_at,
+                video_url,
                 system_tag,
                 note,
                 is_saved,
@@ -126,6 +139,7 @@ def get_saved_comments():
                 likes,
                 replies,
                 created_at,
+                video_url,
                 system_tag,
                 note,
                 is_saved,

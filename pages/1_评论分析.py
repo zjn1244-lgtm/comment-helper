@@ -17,12 +17,13 @@ from core.database import (
 
 
 COLUMN_ALIASES = {
-    "comment_id": ["comment_id", "评论ID", "评论id"],
-    "username": ["username", "用户名", "用户"],
-    "content": ["content", "评论内容", "评论", "comment", "text"],
-    "likes": ["likes", "点赞数", "点赞"],
-    "replies": ["replies", "回复数", "回复"],
-    "created_at": ["created_at", "发布时间", "时间"],
+    "comment_id": ["评论ID", "comment_id", "评论id"],
+    "username": ["用户名称", "username", "用户名", "用户"],
+    "content": ["评论内容", "comment", "content", "评论", "text"],
+    "likes": ["点赞量", "likes", "点赞数", "点赞"],
+    "replies": ["子评论数", "replies", "回复数", "回复"],
+    "created_at": ["评论时间", "created_at", "发布时间", "时间"],
+    "video_url": ["视频链接", "video_url"],
 }
 
 FILTER_OPTIONS = [
@@ -123,6 +124,7 @@ def build_comment_records(comments_df):
                 "likes": to_int(get_column_value(row, COLUMN_ALIASES["likes"], 0)),
                 "replies": to_int(get_column_value(row, COLUMN_ALIASES["replies"], 0)),
                 "created_at": get_column_value(row, COLUMN_ALIASES["created_at"]),
+                "video_url": get_column_value(row, COLUMN_ALIASES["video_url"]),
                 "system_tag": classify_comment(content),
                 "note": None,
                 "is_saved": 0,
@@ -139,9 +141,12 @@ def build_preview_table(records):
         [
             {
                 "id": record.get("id"),
+                "发布用户": record.get("username"),
                 "评论内容": record["content"],
                 "点赞数": record["likes"],
                 "回复数": record["replies"],
+                "发布时间": record.get("created_at"),
+                "视频链接": record.get("video_url"),
                 "系统标签": record["system_tag"],
                 "处理状态": "已处理" if record["is_processed"] else "未处理",
                 "收藏状态": "已收藏" if record["is_saved"] else "未收藏",
@@ -155,9 +160,12 @@ def build_export_table(records):
     return pd.DataFrame(
         [
             {
+                "发布用户": record.get("username"),
                 "评论内容": record["content"],
                 "点赞数": record["likes"],
                 "回复数": record["replies"],
+                "发布时间": record.get("created_at"),
+                "视频链接": record.get("video_url"),
                 "系统标签": record["system_tag"],
                 "是否已处理": "是" if record["is_processed"] else "否",
                 "是否已收藏": "是" if record["is_saved"] else "否",
@@ -265,23 +273,25 @@ def show_comment_list(records):
         saved_text = "已收藏" if record["is_saved"] else "未收藏"
         process_button_text = "取消已处理" if record["is_processed"] else "标记已处理"
         save_button_text = "取消收藏" if record["is_saved"] else "收藏"
-        columns = st.columns([5, 1, 1, 1, 1, 1, 1, 1])
+        columns = st.columns([1.5, 4, 1, 1, 1.5, 1, 1, 1, 1, 1])
 
-        columns[0].write(record["content"])
-        columns[1].write(record["likes"])
-        columns[2].write(record["replies"])
-        columns[3].write(record["system_tag"])
-        columns[4].write(status_text)
-        columns[5].write(saved_text)
+        columns[0].write(record.get("username") or "")
+        columns[1].write(record["content"])
+        columns[2].write(record["likes"])
+        columns[3].write(record["replies"])
+        columns[4].write(record.get("created_at") or "")
+        columns[5].write(record["system_tag"])
+        columns[6].write(status_text)
+        columns[7].write(saved_text)
 
-        if columns[6].button(
+        if columns[8].button(
             process_button_text,
             key=f"processed_{record.get('id', index)}_{record['is_processed']}",
         ):
             set_processed_status(record.get("id"), not record["is_processed"])
             st.rerun()
 
-        if columns[7].button(
+        if columns[9].button(
             save_button_text,
             key=f"saved_{record.get('id', index)}_{record['is_saved']}",
         ):

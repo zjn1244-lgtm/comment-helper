@@ -19,11 +19,15 @@ def build_saved_table(records):
     return pd.DataFrame(
         [
             {
+                "发布用户": record.get("username"),
                 "评论内容": record["content"],
                 "点赞数": record["likes"],
                 "回复数": record["replies"],
+                "发布时间": record.get("created_at"),
+                "视频链接": record.get("video_url"),
                 "系统标签": record["system_tag"],
                 "处理状态": "已处理" if record["is_processed"] else "未处理",
+                "收藏状态": "已收藏" if record["is_saved"] else "未收藏",
             }
             for record in records
         ]
@@ -34,9 +38,12 @@ def build_export_table(records):
     return pd.DataFrame(
         [
             {
+                "发布用户": record.get("username"),
                 "评论内容": record["content"],
                 "点赞数": record["likes"],
                 "回复数": record["replies"],
+                "发布时间": record.get("created_at"),
+                "视频链接": record.get("video_url"),
                 "系统标签": record["system_tag"],
                 "是否已处理": "是" if record["is_processed"] else "否",
                 "是否已收藏": "是" if record["is_saved"] else "否",
