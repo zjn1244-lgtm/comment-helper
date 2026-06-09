@@ -1,10 +1,14 @@
 import streamlit as st
 
+from core.utils import get_workspace_id
+
 
 st.set_page_config(
     page_title="评论区运维助手",
     page_icon="💬",
 )
+
+get_workspace_id()
 
 st.title("评论区运维助手")
 

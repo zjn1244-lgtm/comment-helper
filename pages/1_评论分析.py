@@ -14,6 +14,7 @@ from core.database import (
     update_comment_saved,
     update_comment_processed,
 )
+from core.utils import get_workspace_id
 
 
 COLUMN_ALIASES = {
@@ -55,10 +56,12 @@ st.set_page_config(
 st.title("评论分析")
 st.write("上传 CSV 或 Excel 评论数据文件，预览导入后的表格内容。")
 
+workspace_id = get_workspace_id()
+
 clear_requested = st.button("清空数据库")
 
 if clear_requested:
-    clear_comments()
+    clear_comments(workspace_id)
     st.session_state.pop("last_import_signature", None)
     st.session_state.pop("last_inserted_count", None)
     st.success("数据库已清空")
@@ -119,6 +122,7 @@ def build_comment_records(comments_df):
         records.append(
             {
                 "comment_id": get_column_value(row, COLUMN_ALIASES["comment_id"]),
+                "workspace_id": workspace_id,
                 "username": get_column_value(row, COLUMN_ALIASES["username"]),
                 "content": content,
                 "likes": to_int(get_column_value(row, COLUMN_ALIASES["likes"], 0)),
@@ -250,11 +254,11 @@ def import_and_show_comments(comments_df):
 
 
 def set_processed_status(record_id, is_processed):
-    update_comment_processed(record_id, is_processed)
+    update_comment_processed(record_id, workspace_id, is_processed)
 
 
 def set_saved_status(record_id, is_saved):
-    update_comment_saved(record_id, is_saved)
+    update_comment_saved(record_id, workspace_id, is_saved)
 
 
 def show_comment_list(records):
@@ -300,8 +304,8 @@ def show_comment_list(records):
 
 
 def show_import_result(selected_filter, selected_status, keyword, selected_sort):
-    records = get_comments()
-    total_count = get_comment_count()
+    records = get_comments(workspace_id)
+    total_count = get_comment_count(workspace_id)
     filtered_records = filter_records(
         records,
         selected_filter,
@@ -312,7 +316,7 @@ def show_import_result(selected_filter, selected_status, keyword, selected_sort)
 
     st.info(f"数据库当前共有 {total_count} 条评论")
     if not records:
-        st.info("暂无评论，请上传 CSV 或 Excel 文件")
+        st.info("请上传 CSV 或 Excel 评论数据文件后开始分析")
         return
 
     show_export_buttons(filtered_records, "评论筛选结果")

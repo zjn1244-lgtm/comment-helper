@@ -16,6 +16,7 @@ def init_comments_table():
             """
             CREATE TABLE IF NOT EXISTS comments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id TEXT,
                 comment_id TEXT,
                 username TEXT,
                 content TEXT,
@@ -31,6 +32,7 @@ def init_comments_table():
             )
             """
         )
+        ensure_column(conn, "comments", "workspace_id", "TEXT")
         ensure_column(conn, "comments", "video_url", "TEXT")
 
 
@@ -54,6 +56,7 @@ def insert_comments(comments):
                 """
                 INSERT INTO comments (
                     comment_id,
+                    workspace_id,
                     username,
                     content,
                     likes,
@@ -66,10 +69,11 @@ def insert_comments(comments):
                     is_processed,
                     imported_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     comment.get("comment_id"),
+                    comment.get("workspace_id"),
                     comment.get("username"),
                     comment.get("content"),
                     comment.get("likes", 0),
@@ -88,15 +92,18 @@ def insert_comments(comments):
     return len(comments)
 
 
-def get_comment_count():
+def get_comment_count(workspace_id):
     init_comments_table()
 
     with get_connection() as conn:
-        cursor = conn.execute("SELECT COUNT(*) FROM comments")
+        cursor = conn.execute(
+            "SELECT COUNT(*) FROM comments WHERE workspace_id = ?",
+            (workspace_id,),
+        )
         return cursor.fetchone()[0]
 
 
-def get_comments():
+def get_comments(workspace_id):
     init_comments_table()
 
     with get_connection() as conn:
@@ -105,6 +112,7 @@ def get_comments():
             """
             SELECT
                 id,
+                workspace_id,
                 comment_id,
                 username,
                 content,
@@ -118,13 +126,15 @@ def get_comments():
                 is_processed,
                 imported_at
             FROM comments
+            WHERE workspace_id = ?
             ORDER BY id ASC
-            """
+            """,
+            (workspace_id,),
         )
         return [dict(row) for row in cursor.fetchall()]
 
 
-def get_saved_comments():
+def get_saved_comments(workspace_id):
     init_comments_table()
 
     with get_connection() as conn:
@@ -133,6 +143,7 @@ def get_saved_comments():
             """
             SELECT
                 id,
+                workspace_id,
                 comment_id,
                 username,
                 content,
@@ -146,37 +157,46 @@ def get_saved_comments():
                 is_processed,
                 imported_at
             FROM comments
-            WHERE is_saved = 1
+            WHERE workspace_id = ? AND is_saved = 1
             ORDER BY id ASC
-            """
+            """,
+            (workspace_id,),
         )
         return [dict(row) for row in cursor.fetchall()]
 
 
-def clear_comments():
+def clear_comments(workspace_id):
     init_comments_table()
 
     with get_connection() as conn:
-        conn.execute("DELETE FROM comments")
+        conn.execute("DELETE FROM comments WHERE workspace_id = ?", (workspace_id,))
 
 
-def update_comment_processed(comment_id, is_processed):
+def update_comment_processed(comment_id, workspace_id, is_processed):
     init_comments_table()
 
     with get_connection() as conn:
         cursor = conn.execute(
-            "UPDATE comments SET is_processed = ? WHERE id = ?",
-            (1 if is_processed else 0, comment_id),
+            """
+            UPDATE comments
+            SET is_processed = ?
+            WHERE id = ? AND workspace_id = ?
+            """,
+            (1 if is_processed else 0, comment_id, workspace_id),
         )
         return cursor.rowcount > 0
 
 
-def update_comment_saved(comment_id, is_saved):
+def update_comment_saved(comment_id, workspace_id, is_saved):
     init_comments_table()
 
     with get_connection() as conn:
         cursor = conn.execute(
-            "UPDATE comments SET is_saved = ? WHERE id = ?",
-            (1 if is_saved else 0, comment_id),
+            """
+            UPDATE comments
+            SET is_saved = ?
+            WHERE id = ? AND workspace_id = ?
+            """,
+            (1 if is_saved else 0, comment_id, workspace_id),
         )
         return cursor.rowcount > 0

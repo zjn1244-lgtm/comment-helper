@@ -5,6 +5,7 @@ import pandas as pd
 import streamlit as st
 
 from core.database import get_saved_comments, init_comments_table
+from core.utils import get_workspace_id
 
 
 st.set_page_config(
@@ -13,6 +14,8 @@ st.set_page_config(
 )
 
 st.title("收藏夹")
+
+workspace_id = get_workspace_id()
 
 
 def build_saved_table(records):
@@ -83,7 +86,7 @@ def show_export_buttons(records):
 
 init_comments_table()
 
-saved_comments = get_saved_comments()
+saved_comments = get_saved_comments(workspace_id)
 
 if not saved_comments:
     st.info("暂无收藏评论")
