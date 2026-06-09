@@ -7,8 +7,10 @@ from core.classifier import classify_comment
 from core.database import (
     clear_comments,
     get_comment_count,
+    get_comments,
     init_comments_table,
     insert_comments,
+    update_comment_processed,
 )
 
 
@@ -35,6 +37,12 @@ SORT_OPTIONS = [
     "回复数从高到低",
 ]
 
+PROCESS_STATUS_OPTIONS = [
+    "全部",
+    "未处理",
+    "已处理",
+]
+
 
 st.set_page_config(
     page_title="评论分析",
@@ -48,15 +56,18 @@ clear_requested = st.button("清空数据库")
 
 if clear_requested:
     clear_comments()
-    st.session_state.pop("preview_records", None)
     st.session_state.pop("last_import_signature", None)
     st.session_state.pop("last_inserted_count", None)
-    st.session_state.pop("last_total_count", None)
     st.success("数据库已清空")
 
 selected_tag = st.selectbox(
     "按系统标签筛选",
     FILTER_OPTIONS,
+)
+
+selected_process_status = st.selectbox(
+    "按处理状态筛选",
+    PROCESS_STATUS_OPTIONS,
 )
 
 search_keyword = st.text_input("搜索评论内容")
@@ -125,61 +136,112 @@ def build_preview_table(records):
     return pd.DataFrame(
         [
             {
+                "id": record.get("id"),
                 "评论内容": record["content"],
                 "点赞数": record["likes"],
                 "回复数": record["replies"],
                 "系统标签": record["system_tag"],
+                "处理状态": "已处理" if record["is_processed"] else "未处理",
             }
             for record in records
         ]
     )
 
 
-def filter_preview_table(preview_df, selected_filter):
+def filter_records(records, selected_filter, selected_status, keyword, selected_sort):
+    filtered_records = records
+
     if selected_filter == "全部评论":
-        return preview_df
-    return preview_df[preview_df["系统标签"] == selected_filter]
+        filtered_records = filtered_records
+    else:
+        filtered_records = [
+            record
+            for record in filtered_records
+            if record["system_tag"] == selected_filter
+        ]
 
+    if selected_status == "未处理":
+        filtered_records = [
+            record for record in filtered_records if not record["is_processed"]
+        ]
+    elif selected_status == "已处理":
+        filtered_records = [
+            record for record in filtered_records if record["is_processed"]
+        ]
 
-def search_preview_table(preview_df, keyword):
     keyword = keyword.strip()
-    if not keyword:
-        return preview_df
-    return preview_df[
-        preview_df["评论内容"].fillna("").astype(str).str.contains(keyword, na=False)
-    ]
+    if keyword:
+        filtered_records = [
+            record
+            for record in filtered_records
+            if keyword in str(record.get("content") or "")
+        ]
 
-
-def sort_preview_table(preview_df, selected_sort):
     if selected_sort == "点赞数从高到低":
-        return preview_df.sort_values("点赞数", ascending=False)
+        return sorted(filtered_records, key=lambda record: record["likes"], reverse=True)
     if selected_sort == "回复数从高到低":
-        return preview_df.sort_values("回复数", ascending=False)
-    return preview_df
+        return sorted(filtered_records, key=lambda record: record["replies"], reverse=True)
+
+    return filtered_records
 
 
 def import_and_show_comments(comments_df):
     records = build_comment_records(comments_df)
     inserted_count = insert_comments(records)
-    total_count = get_comment_count()
-
-    st.session_state.preview_records = records
     st.session_state.last_inserted_count = inserted_count
-    st.session_state.last_total_count = total_count
 
 
-def show_import_result(selected_filter, keyword, selected_sort):
-    records = st.session_state.get("preview_records", [])
-    inserted_count = st.session_state.get("last_inserted_count", 0)
-    total_count = st.session_state.get("last_total_count", get_comment_count())
-    preview_df = build_preview_table(records)
-    filtered_df = filter_preview_table(preview_df, selected_filter)
-    filtered_df = search_preview_table(filtered_df, keyword)
-    filtered_df = sort_preview_table(filtered_df, selected_sort)
+def set_processed_status(record_id, is_processed):
+    update_comment_processed(record_id, is_processed)
 
-    st.success(f"导入成功 {inserted_count} 条")
+
+def show_comment_list(records):
+    if not records:
+        st.warning("没有符合条件的评论")
+        return
+
+    st.dataframe(
+        build_preview_table(records).drop(columns=["id"]),
+        use_container_width=True,
+    )
+
+    st.write("处理状态操作")
+    for index, record in enumerate(records):
+        status_text = "已处理" if record["is_processed"] else "未处理"
+        button_text = "取消已处理" if record["is_processed"] else "标记已处理"
+        columns = st.columns([5, 1, 1, 1, 1, 1])
+
+        columns[0].write(record["content"])
+        columns[1].write(record["likes"])
+        columns[2].write(record["replies"])
+        columns[3].write(record["system_tag"])
+        columns[4].write(status_text)
+
+        if columns[5].button(
+            button_text,
+            key=f"processed_{record.get('id', index)}_{record['is_processed']}",
+        ):
+            set_processed_status(record.get("id"), not record["is_processed"])
+            st.rerun()
+
+
+def show_import_result(selected_filter, selected_status, keyword, selected_sort):
+    records = get_comments()
+    total_count = get_comment_count()
+    filtered_records = filter_records(
+        records,
+        selected_filter,
+        selected_status,
+        keyword,
+        selected_sort,
+    )
+
     st.info(f"数据库当前共有 {total_count} 条评论")
-    st.dataframe(filtered_df, use_container_width=True)
+    if not records:
+        st.info("暂无评论，请上传 CSV 或 Excel 文件")
+        return
+
+    show_comment_list(filtered_records)
 
 
 def read_uploaded_file(uploaded_file):
@@ -207,14 +269,15 @@ if uploaded_file is not None and not clear_requested:
             elif st.session_state.get("last_import_signature") != current_signature:
                 import_and_show_comments(comments_df)
                 st.session_state.last_import_signature = current_signature
-                show_import_result(selected_tag, search_keyword, selected_sort)
-            elif st.session_state.get("preview_records"):
-                show_import_result(selected_tag, search_keyword, selected_sort)
+                st.success(f"导入成功 {st.session_state.last_inserted_count} 条")
             else:
-                import_and_show_comments(comments_df)
-                st.session_state.last_import_signature = current_signature
-                show_import_result(selected_tag, search_keyword, selected_sort)
+                st.info("当前文件已导入")
     except Exception:
         st.error("文件读取失败，请检查文件格式或内容后重新上传。")
-elif st.session_state.get("preview_records"):
-    show_import_result(selected_tag, search_keyword, selected_sort)
+
+show_import_result(
+    selected_tag,
+    selected_process_status,
+    search_keyword,
+    selected_sort,
+)

@@ -38,27 +38,61 @@ def insert_comments(comments):
 
     init_comments_table()
 
-    rows = [
-        (
-            comment.get("comment_id"),
-            comment.get("username"),
-            comment.get("content"),
-            comment.get("likes", 0),
-            comment.get("replies", 0),
-            comment.get("created_at"),
-            comment.get("system_tag"),
-            comment.get("note"),
-            comment.get("is_saved", 0),
-            comment.get("is_processed", 0),
-            comment.get("imported_at"),
-        )
-        for comment in comments
-    ]
+    with get_connection() as conn:
+        for comment in comments:
+            cursor = conn.execute(
+                """
+                INSERT INTO comments (
+                    comment_id,
+                    username,
+                    content,
+                    likes,
+                    replies,
+                    created_at,
+                    system_tag,
+                    note,
+                    is_saved,
+                    is_processed,
+                    imported_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    comment.get("comment_id"),
+                    comment.get("username"),
+                    comment.get("content"),
+                    comment.get("likes", 0),
+                    comment.get("replies", 0),
+                    comment.get("created_at"),
+                    comment.get("system_tag"),
+                    comment.get("note"),
+                    comment.get("is_saved", 0),
+                    comment.get("is_processed", 0),
+                    comment.get("imported_at"),
+                ),
+            )
+            comment["id"] = cursor.lastrowid
+
+    return len(comments)
+
+
+def get_comment_count():
+    init_comments_table()
 
     with get_connection() as conn:
-        conn.executemany(
+        cursor = conn.execute("SELECT COUNT(*) FROM comments")
+        return cursor.fetchone()[0]
+
+
+def get_comments():
+    init_comments_table()
+
+    with get_connection() as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute(
             """
-            INSERT INTO comments (
+            SELECT
+                id,
                 comment_id,
                 username,
                 content,
@@ -70,21 +104,11 @@ def insert_comments(comments):
                 is_saved,
                 is_processed,
                 imported_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            rows,
+            FROM comments
+            ORDER BY id ASC
+            """
         )
-
-    return len(rows)
-
-
-def get_comment_count():
-    init_comments_table()
-
-    with get_connection() as conn:
-        cursor = conn.execute("SELECT COUNT(*) FROM comments")
-        return cursor.fetchone()[0]
+        return [dict(row) for row in cursor.fetchall()]
 
 
 def clear_comments():
@@ -92,3 +116,14 @@ def clear_comments():
 
     with get_connection() as conn:
         conn.execute("DELETE FROM comments")
+
+
+def update_comment_processed(comment_id, is_processed):
+    init_comments_table()
+
+    with get_connection() as conn:
+        cursor = conn.execute(
+            "UPDATE comments SET is_processed = ? WHERE id = ?",
+            (1 if is_processed else 0, comment_id),
+        )
+        return cursor.rowcount > 0
