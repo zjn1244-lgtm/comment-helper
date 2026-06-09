@@ -3,7 +3,13 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 
-from core.database import get_comment_count, init_comments_table, insert_comments
+from core.classifier import classify_comment
+from core.database import (
+    clear_comments,
+    get_comment_count,
+    init_comments_table,
+    insert_comments,
+)
 
 
 COLUMN_ALIASES = {
@@ -23,6 +29,10 @@ st.set_page_config(
 
 st.title("评论分析")
 st.write("上传 CSV 或 Excel 评论数据文件，预览导入后的表格内容。")
+
+if st.button("清空数据库"):
+    clear_comments()
+    st.success("数据库已清空")
 
 uploaded_file = st.file_uploader(
     "上传评论数据文件",
@@ -59,15 +69,16 @@ def build_comment_records(comments_df):
     records = []
 
     for _, row in comments_df.iterrows():
+        content = get_column_value(row, COLUMN_ALIASES["content"])
         records.append(
             {
                 "comment_id": get_column_value(row, COLUMN_ALIASES["comment_id"]),
                 "username": get_column_value(row, COLUMN_ALIASES["username"]),
-                "content": get_column_value(row, COLUMN_ALIASES["content"]),
+                "content": content,
                 "likes": to_int(get_column_value(row, COLUMN_ALIASES["likes"], 0)),
                 "replies": to_int(get_column_value(row, COLUMN_ALIASES["replies"], 0)),
                 "created_at": get_column_value(row, COLUMN_ALIASES["created_at"]),
-                "system_tag": None,
+                "system_tag": classify_comment(content),
                 "note": None,
                 "is_saved": 0,
                 "is_processed": 0,
@@ -76,6 +87,30 @@ def build_comment_records(comments_df):
         )
 
     return records
+
+
+def build_preview_table(records):
+    return pd.DataFrame(
+        [
+            {
+                "评论内容": record["content"],
+                "点赞数": record["likes"],
+                "回复数": record["replies"],
+                "系统标签": record["system_tag"],
+            }
+            for record in records
+        ]
+    )
+
+
+def import_and_show_comments(comments_df):
+    records = build_comment_records(comments_df)
+    inserted_count = insert_comments(records)
+    total_count = get_comment_count()
+
+    st.success(f"导入成功 {inserted_count} 条")
+    st.info(f"数据库当前共有 {total_count} 条评论")
+    st.dataframe(build_preview_table(records), use_container_width=True)
 
 
 init_comments_table()
@@ -89,21 +124,13 @@ if uploaded_file is not None:
             if comments_df.empty:
                 st.error("文件已读取，但没有可显示的数据。")
             else:
-                inserted_count = insert_comments(build_comment_records(comments_df))
-                total_count = get_comment_count()
-                st.success(f"导入成功 {inserted_count} 条")
-                st.info(f"数据库当前共有 {total_count} 条评论")
-                st.dataframe(comments_df, use_container_width=True)
+                import_and_show_comments(comments_df)
         elif uploaded_file.name.lower().endswith(".xlsx"):
             comments_df = pd.read_excel(uploaded_file)
             if comments_df.empty:
                 st.error("文件已读取，但没有可显示的数据。")
             else:
-                inserted_count = insert_comments(build_comment_records(comments_df))
-                total_count = get_comment_count()
-                st.success(f"导入成功 {inserted_count} 条")
-                st.info(f"数据库当前共有 {total_count} 条评论")
-                st.dataframe(comments_df, use_container_width=True)
+                import_and_show_comments(comments_df)
         else:
             st.error("暂不支持该文件类型，请上传 CSV 或 XLSX 文件。")
     except Exception:

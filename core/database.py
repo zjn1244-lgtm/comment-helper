@@ -85,3 +85,10 @@ def get_comment_count():
     with get_connection() as conn:
         cursor = conn.execute("SELECT COUNT(*) FROM comments")
         return cursor.fetchone()[0]
+
+
+def clear_comments():
+    init_comments_table()
+
+    with get_connection() as conn:
+        conn.execute("DELETE FROM comments")
