@@ -1,3 +1,4 @@
+from io import BytesIO
 from datetime import datetime
 
 import pandas as pd
@@ -150,6 +151,53 @@ def build_preview_table(records):
     )
 
 
+def build_export_table(records):
+    return pd.DataFrame(
+        [
+            {
+                "评论内容": record["content"],
+                "点赞数": record["likes"],
+                "回复数": record["replies"],
+                "系统标签": record["system_tag"],
+                "是否已处理": "是" if record["is_processed"] else "否",
+                "是否已收藏": "是" if record["is_saved"] else "否",
+            }
+            for record in records
+        ]
+    )
+
+
+def build_excel_file(export_df):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        export_df.to_excel(writer, index=False, sheet_name="评论")
+    return output.getvalue()
+
+
+def show_export_buttons(records, filename_prefix):
+    if not records:
+        return
+
+    export_df = build_export_table(records)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    csv_data = export_df.to_csv(index=False).encode("utf-8-sig")
+    excel_data = build_excel_file(export_df)
+    columns = st.columns(2)
+
+    columns[0].download_button(
+        "导出 CSV",
+        data=csv_data,
+        file_name=f"{filename_prefix}_{timestamp}.csv",
+        mime="text/csv",
+    )
+    columns[1].download_button(
+        "导出 Excel",
+        data=excel_data,
+        file_name=f"{filename_prefix}_{timestamp}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
 def filter_records(records, selected_filter, selected_status, keyword, selected_sort):
     filtered_records = records
 
@@ -257,6 +305,7 @@ def show_import_result(selected_filter, selected_status, keyword, selected_sort)
         st.info("暂无评论，请上传 CSV 或 Excel 文件")
         return
 
+    show_export_buttons(filtered_records, "评论筛选结果")
     show_comment_list(filtered_records)
 
 
