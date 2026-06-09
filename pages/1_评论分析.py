@@ -21,6 +21,14 @@ COLUMN_ALIASES = {
     "created_at": ["created_at", "发布时间", "时间"],
 }
 
+FILTER_OPTIONS = [
+    "全部评论",
+    "普通评论",
+    "值得回复评论",
+    "风险评论",
+    "高价值评论",
+]
+
 
 st.set_page_config(
     page_title="评论分析",
@@ -30,9 +38,20 @@ st.set_page_config(
 st.title("评论分析")
 st.write("上传 CSV 或 Excel 评论数据文件，预览导入后的表格内容。")
 
-if st.button("清空数据库"):
+clear_requested = st.button("清空数据库")
+
+if clear_requested:
     clear_comments()
+    st.session_state.pop("preview_records", None)
+    st.session_state.pop("last_import_signature", None)
+    st.session_state.pop("last_inserted_count", None)
+    st.session_state.pop("last_total_count", None)
     st.success("数据库已清空")
+
+selected_tag = st.selectbox(
+    "按系统标签筛选",
+    FILTER_OPTIONS,
+)
 
 uploaded_file = st.file_uploader(
     "上传评论数据文件",
@@ -103,35 +122,67 @@ def build_preview_table(records):
     )
 
 
+def filter_preview_table(preview_df, selected_filter):
+    if selected_filter == "全部评论":
+        return preview_df
+    return preview_df[preview_df["系统标签"] == selected_filter]
+
+
 def import_and_show_comments(comments_df):
     records = build_comment_records(comments_df)
     inserted_count = insert_comments(records)
     total_count = get_comment_count()
 
+    st.session_state.preview_records = records
+    st.session_state.last_inserted_count = inserted_count
+    st.session_state.last_total_count = total_count
+
+
+def show_import_result(selected_filter):
+    records = st.session_state.get("preview_records", [])
+    inserted_count = st.session_state.get("last_inserted_count", 0)
+    total_count = st.session_state.get("last_total_count", get_comment_count())
+    preview_df = build_preview_table(records)
+    filtered_df = filter_preview_table(preview_df, selected_filter)
+
     st.success(f"导入成功 {inserted_count} 条")
     st.info(f"数据库当前共有 {total_count} 条评论")
-    st.dataframe(build_preview_table(records), use_container_width=True)
+    st.dataframe(filtered_df, use_container_width=True)
+
+
+def read_uploaded_file(uploaded_file):
+    if uploaded_file.name.lower().endswith(".csv"):
+        return pd.read_csv(uploaded_file)
+    if uploaded_file.name.lower().endswith(".xlsx"):
+        return pd.read_excel(uploaded_file)
+    return None
 
 
 init_comments_table()
 
-if uploaded_file is not None:
+if uploaded_file is not None and not clear_requested:
     try:
         if uploaded_file.size == 0:
             st.error("文件为空，请上传包含评论数据的文件。")
-        elif uploaded_file.name.lower().endswith(".csv"):
-            comments_df = pd.read_csv(uploaded_file)
-            if comments_df.empty:
-                st.error("文件已读取，但没有可显示的数据。")
-            else:
-                import_and_show_comments(comments_df)
-        elif uploaded_file.name.lower().endswith(".xlsx"):
-            comments_df = pd.read_excel(uploaded_file)
-            if comments_df.empty:
-                st.error("文件已读取，但没有可显示的数据。")
-            else:
-                import_and_show_comments(comments_df)
         else:
-            st.error("暂不支持该文件类型，请上传 CSV 或 XLSX 文件。")
+            comments_df = read_uploaded_file(uploaded_file)
+            current_signature = (uploaded_file.name, uploaded_file.size)
+
+            if comments_df is None:
+                st.error("暂不支持该文件类型，请上传 CSV 或 XLSX 文件。")
+            elif comments_df.empty:
+                st.error("文件已读取，但没有可显示的数据。")
+            elif st.session_state.get("last_import_signature") != current_signature:
+                import_and_show_comments(comments_df)
+                st.session_state.last_import_signature = current_signature
+                show_import_result(selected_tag)
+            elif st.session_state.get("preview_records"):
+                show_import_result(selected_tag)
+            else:
+                import_and_show_comments(comments_df)
+                st.session_state.last_import_signature = current_signature
+                show_import_result(selected_tag)
     except Exception:
         st.error("文件读取失败，请检查文件格式或内容后重新上传。")
+elif st.session_state.get("preview_records"):
+    show_import_result(selected_tag)
