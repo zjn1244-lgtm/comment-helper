@@ -8,7 +8,8 @@ st.set_page_config(
     page_icon="💬",
 )
 
-get_workspace_id()
+workspace_id = get_workspace_id()
+st.caption(f"当前 workspace_id: {workspace_id}")
 
 st.title("评论区运维助手")
 

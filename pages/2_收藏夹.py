@@ -16,6 +16,7 @@ st.set_page_config(
 st.title("收藏夹")
 
 workspace_id = get_workspace_id()
+st.caption(f"当前 workspace_id: {workspace_id}")
 
 
 def build_saved_table(records):

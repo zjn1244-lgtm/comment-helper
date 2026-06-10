@@ -57,6 +57,7 @@ st.title("评论分析")
 st.write("上传 CSV 或 Excel 评论数据文件，预览导入后的表格内容。")
 
 workspace_id = get_workspace_id()
+st.caption(f"当前 workspace_id: {workspace_id}")
 
 clear_requested = st.button("清空数据库")
 
